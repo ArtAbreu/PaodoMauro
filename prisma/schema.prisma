@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [uuid_ossp()]
+}
+
+enum Role {
+  admin
+  user
+}
+
+enum InventoryMovementType {
+  IN
+  OUT
+  ADJ
+}
+
+enum SalesOrderStatus {
+  OPEN
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  DELIVERED
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PIX
+  CASH
+  CARD
+  BOLETO
+}
+
+enum CashbookType {
+  IN
+  OUT
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(user)
+  totpSecret   String?  @db.VarChar(64)
+  backupCodes String[] @default([])
+  createdAt    DateTime @default(now())
+  mustResetPwd Boolean  @default(false)
+  auditLogs    AuditLog[]
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+  orders    SalesOrder[]
+}
+
+model Product {
+  id          String           @id @default(uuid())
+  name        String
+  category    String
+  unitPrice   Decimal          @db.Decimal(12, 2)
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  recipe      Recipe?
+  batches     ProductionBatch[]
+  orderItems  SalesOrderItem[]
+}
+
+model Ingredient {
+  id        String               @id @default(uuid())
+  name      String
+  unit      String
+  unitCost  Decimal              @db.Decimal(12, 4)
+  minStock  Decimal              @db.Decimal(12, 3)
+  createdAt DateTime             @default(now())
+  recipeItems RecipeItem[]
+  movements   InventoryMovement[]
+}
+
+model Recipe {
+  id         String       @id @default(uuid())
+  product    Product      @relation(fields: [productId], references: [id])
+  productId  String       @unique
+  yieldUnits Int
+  notes      String?
+  items      RecipeItem[]
+}
+
+model RecipeItem {
+  id            String      @id @default(uuid())
+  recipe        Recipe      @relation(fields: [recipeId], references: [id])
+  recipeId      String
+  ingredient    Ingredient  @relation(fields: [ingredientId], references: [id])
+  ingredientId  String
+  qtyPerBatch   Decimal     @db.Decimal(12, 3)
+  unit          String
+}
+
+model ProductionBatch {
+  id           String     @id @default(uuid())
+  product      Product    @relation(fields: [productId], references: [id])
+  productId    String
+  plannedUnits Int
+  actualUnits  Int?
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  notes        String?
+  auditLogs    AuditLog[]
+}
+
+model InventoryMovement {
+  id           String                  @id @default(uuid())
+  ingredient   Ingredient              @relation(fields: [ingredientId], references: [id])
+  ingredientId String
+  type         InventoryMovementType
+  qty          Decimal                 @db.Decimal(12, 3)
+  unitCost     Decimal?                @db.Decimal(12, 4)
+  reason       String
+  createdAt    DateTime                @default(now())
+}
+
+model SalesOrder {
+  id            String           @id @default(uuid())
+  customer      Customer?        @relation(fields: [customerId], references: [id])
+  customerId    String?
+  orderDate     DateTime         @db.Date
+  dueDate       DateTime?        @db.Date
+  status        SalesOrderStatus @default(OPEN)
+  paymentMethod PaymentMethod?
+  totalGross    Decimal          @db.Decimal(12, 2)
+  totalDiscount Decimal          @db.Decimal(12, 2)
+  totalNet      Decimal          @db.Decimal(12, 2)
+  createdAt     DateTime         @default(now())
+  items         SalesOrderItem[]
+  auditLogs     AuditLog[]
+
+  @@index([orderDate])
+  @@index([status])
+}
+
+model SalesOrderItem {
+  id        String    @id @default(uuid())
+  order     SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  product   Product   @relation(fields: [productId], references: [id])
+  productId String
+  qty       Decimal   @db.Decimal(12, 3)
+  unitPrice Decimal   @db.Decimal(12, 2)
+  total     Decimal   @db.Decimal(12, 2)
+}
+
+model Expense {
+  id            String        @id @default(uuid())
+  date          DateTime      @db.Date
+  category      String
+  description   String
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod
+  createdAt     DateTime      @default(now())
+  auditLogs     AuditLog[]
+
+  @@index([date])
+}
+
+model Cashbook {
+  id            String        @id @default(uuid())
+  date          DateTime      @db.Date
+  type          CashbookType
+  description   String
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod
+  refTable      String
+  refId         String?
+  createdAt     DateTime      @default(now())
+
+  @@index([date])
+  @@unique([refId, refTable])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  action    String
+  entity    String
+  entityId  String
+  payloadJson Json
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  key   String   @id
+  value Decimal? @db.Decimal(12, 2)
+  updatedAt DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}

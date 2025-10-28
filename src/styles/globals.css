@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 min-h-screen;
+  font-feature-settings: "liga" off;
+}
+
+a {
+  @apply text-brand hover:text-brand-dark font-medium;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  @apply outline-none ring-2 ring-brand ring-offset-2;
+}
